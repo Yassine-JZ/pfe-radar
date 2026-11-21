@@ -5,6 +5,7 @@ from . import models  # noqa: F401  (enregistre les tables)
 from .config import CORS_ORIGINS
 from .database import Base, engine
 from .routers import auth
+from .routers import auth, cv
 
 Base.metadata.create_all(bind=engine)
 
@@ -16,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(cv.router)
 
 
 @app.get("/health")

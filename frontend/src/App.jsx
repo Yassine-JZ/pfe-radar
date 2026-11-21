@@ -3,6 +3,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import CvCheck from "./pages/CvCheck";
 
 export default function App() {
   return (
@@ -17,6 +18,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/cv-check"
+  element={
+    <ProtectedRoute>
+      <CvCheck />
+    </ProtectedRoute>
+  }
+/>
     </Routes>
   );
 }
