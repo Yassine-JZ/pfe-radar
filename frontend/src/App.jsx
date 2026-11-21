@@ -3,7 +3,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-
+import GraphqlCheck from "./pages/GraphqlCheck";
 export default function App() {
   return (
     <Routes>
@@ -17,6 +17,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/graphql-check"
+  element={
+    <ProtectedRoute>
+      <GraphqlCheck />
+    </ProtectedRoute>
+  }
+/>
     </Routes>
   );
 }

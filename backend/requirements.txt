@@ -5,3 +5,4 @@ psycopg2-binary==2.9.9
 pydantic[email]==2.9.2
 bcrypt==4.2.0
 PyJWT==2.9.0
+strawberry-graphql[fastapi]>=0.240,<1
