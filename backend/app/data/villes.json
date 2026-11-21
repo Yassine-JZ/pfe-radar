@@ -1,0 +1,10 @@
+[
+  {"name": "Tunis", "latitude": 36.8065, "longitude": 10.1815},
+  {"name": "Ariana", "latitude": 36.8665, "longitude": 10.1647},
+  {"name": "Ben Arous", "latitude": 36.7531, "longitude": 10.2189},
+  {"name": "Nabeul", "latitude": 36.4513, "longitude": 10.7357},
+  {"name": "Sousse", "latitude": 35.8256, "longitude": 10.6369},
+  {"name": "Monastir", "latitude": 35.7643, "longitude": 10.8113},
+  {"name": "Sfax", "latitude": 34.7406, "longitude": 10.7603},
+  {"name": "Bizerte", "latitude": 37.2744, "longitude": 9.8739}
+]
