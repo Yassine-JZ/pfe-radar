@@ -7,7 +7,7 @@ from .config import CORS_ORIGINS
 from .database import Base, engine
 from .gql.context import get_context
 from .gql.schema import schema
-from .routers import auth
+from .routers import auth, cv
 
 Base.metadata.create_all(bind=engine)
 
@@ -19,6 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(cv.router)
 app.include_router(
     GraphQLRouter(schema, context_getter=get_context), prefix="/graphql"
 )
