@@ -26,19 +26,31 @@ def create_token(user_id: int) -> str:
     return jwt.encode({"sub": str(user_id), "exp": expire}, JWT_SECRET, algorithm="HS256")
 
 
-def get_current_user(
-    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
-    db: Session = Depends(get_db),
-) -> User:
-    unauthorized = HTTPException(status.HTTP_401_UNAUTHORIZED, "Non authentifié")
+def _user_from_credentials(
+    creds: HTTPAuthorizationCredentials | None, db: Session
+) -> User | None:
     if creds is None:
-        raise unauthorized
+        return None
     try:
         payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
         user_id = int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
-        raise unauthorized
-    user = db.get(User, user_id)
+        return None
+    return db.get(User, user_id)
+
+
+def get_optional_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User | None:
+    return _user_from_credentials(creds, db)
+
+
+def get_current_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    user = _user_from_credentials(creds, db)
     if user is None:
-        raise unauthorized
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Non authentifié")
     return user
