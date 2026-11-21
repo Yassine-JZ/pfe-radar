@@ -1,0 +1,19 @@
+.cvp { display: flex; flex-direction: column; gap: 16px; color: #111827; }
+.cvp-title { margin: 0; font-family: Georgia, serif; font-size: 28px; display: flex; align-items: center; gap: 12px; }
+.cvp-badge { font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #0f766e; border: 1px solid #99d5cc; background: #e6f4f1; border-radius: 8px; padding: 2px 8px; }
+.cvp-drop { border: 2px dashed #94a3b8; border-radius: 14px; padding: 20px; text-align: center; background: rgba(255, 255, 255, 0.6); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cvp-drop.is-drag { border-color: #0f766e; background: #e6f4f1; }
+.cvp-hint { margin: 0; font-size: 14px; color: #4b5563; }
+.cvp-info { margin: 0; font-size: 14px; color: #0f766e; }
+.cvp-error { margin: 0; font-size: 14px; color: #b91c1c; }
+.cvp-btn-outline { padding: 10px 18px; border: 1px solid #0f766e; background: #fff; color: #0f766e; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.cvp-btn { padding: 14px; border: 0; border-radius: 12px; background: #0f766e; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+.cvp-btn:disabled, .cvp-btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+.cvp-card { border: 1px solid #d1e7e3; border-radius: 14px; background: rgba(255, 255, 255, 0.7); padding: 16px; }
+.cvp-file { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+.cvp-pdf { font-size: 12px; font-weight: 700; color: #0f766e; background: #e6f4f1; border-radius: 8px; padding: 10px 8px; }
+.cvp-fields { margin: 0; display: flex; flex-direction: column; }
+.cvp-fields > div { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+.cvp-fields > div:last-child { border-bottom: 0; }
+.cvp-fields dt { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; }
+.cvp-fields dd { margin: 4px 0 0; font-size: 14px; white-space: pre-line; }
