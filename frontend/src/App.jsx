@@ -1,9 +1,11 @@
 import { Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import CvCheck from "./pages/CvCheck";
+import GraphqlCheck from "./pages/GraphqlCheck";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import GraphqlCheck from "./pages/GraphqlCheck";
+
 export default function App() {
   return (
     <Routes>
@@ -18,13 +20,21 @@ export default function App() {
         }
       />
       <Route
-  path="/graphql-check"
-  element={
-    <ProtectedRoute>
-      <GraphqlCheck />
-    </ProtectedRoute>
-  }
-/>
+        path="/cv-check"
+        element={
+          <ProtectedRoute>
+            <CvCheck />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/graphql-check"
+        element={
+          <ProtectedRoute>
+            <GraphqlCheck />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
