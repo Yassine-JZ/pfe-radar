@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,12 @@ class User(Base):
 
 class Offer(Base):
     __tablename__ = "offers"
+    # Une même offre ne peut exister qu'une fois par source (évite les doublons
+    # quand on relance le seed ou un import externe). NULL est permis pour
+    # external_id : les offres saisies à la main n'en ont pas.
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_offers_source_external_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200), index=True)
@@ -34,6 +40,16 @@ class Offer(Base):
     skills: Mapped[list[str]] = mapped_column(ARRAY(String(60)), default=list)
     apply_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     published_at: Mapped[date] = mapped_column(Date, default=date.today)
+    # Date limite de candidature : permet de masquer les offres expirées.
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Origine de l'offre : "seed" (fichier offres_seed.json), plus tard "jsearch", etc.
+    source: Mapped[str] = mapped_column(String(30), default="seed", index=True)
+    # Identifiant de l'offre chez la source (sert à éviter les doublons).
+    external_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Dernière fois que l'offre a été chargée/rafraîchie (âge du cache).
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )

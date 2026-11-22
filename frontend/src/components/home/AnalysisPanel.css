@@ -1,0 +1,22 @@
+.anp { display: flex; flex-direction: column; gap: 14px; color: #111827; }
+.anp-title { margin: 0; font-family: Georgia, serif; font-size: 28px; display: flex; align-items: center; gap: 12px; }
+.anp-badge { font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #0f766e; border: 1px solid #99d5cc; background: #e6f4f1; border-radius: 8px; padding: 2px 8px; }
+.anp-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.anp-step { display: flex; justify-content: space-between; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: rgba(255, 255, 255, 0.6); font-size: 15px; }
+.anp-step.is-done { border-color: #99d5cc; }
+.anp-step.is-done .anp-step-state { color: #065f46; font-weight: 600; }
+.anp-step.is-running .anp-step-state { color: #0f766e; }
+.anp-step.is-error .anp-step-state { color: #b91c1c; }
+.anp-step-state { font-size: 13px; color: #6b7280; }
+.anp-hint { margin: 0; font-size: 14px; color: #4b5563; }
+.anp-error { margin: 0; font-size: 14px; color: #b91c1c; }
+.anp-sub { margin: 8px 0 0; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; }
+.anp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.anp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border: 1px solid #99d5cc; border-radius: 999px; background: #fff; font-size: 14px; color: #0f5f58; }
+.anp-chip button { border: 0; background: transparent; color: #4b5563; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.anp-chip button:hover { color: #b91c1c; }
+.anp-select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font-size: 14px; color: #111827; max-width: 320px; }
+.anp-domains { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.anp-domain-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+.anp-bar { height: 8px; border-radius: 99px; background: rgba(15, 23, 42, 0.1); }
+.anp-bar > div { height: 8px; border-radius: 99px; background: #0f766e; }

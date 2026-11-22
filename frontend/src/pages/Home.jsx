@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -8,30 +8,33 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "../auth/AuthContext";
+import { useAnalysis } from "../hooks/useAnalysis";
+import { useCvUpload } from "../hooks/useCvUpload";
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5 Mo
-
-// ---------------------------------------------------------------------------
-// Données de démonstration (statiques).
-// Elles seront remplacées par la réponse du backend à l'étape suivante.
-// ---------------------------------------------------------------------------
-const STEPS = [
+const STEP_LABELS = [
   "Extraction du texte",
   "Détection des compétences",
-  "Comparaison avec 42 offres",
+  "Comparaison avec les offres",
 ];
 
-const SKILLS = ["Python", "SQL", "React", "Docker", "PostgreSQL"];
+const STATE_TEXT = {
+  waiting: "En attente",
+  running: "En cours…",
+  done: "Terminé",
+  error: "Erreur",
+};
 
-const DOMAINS = [
-  { domain: "Data", value: 80 },
-  { domain: "Web", value: 70 },
-  { domain: "DevOps", value: 45 },
-  { domain: "Mobile", value: 30 },
-  { domain: "IA / ML", value: 40 },
-];
-const DOMAIN_VALUE = Object.fromEntries(DOMAINS.map((d) => [d.domain, d.value]));
+// Correspondance entre l'état d'un hook et l'état affiché d'une étape.
+const UPLOAD_TO_STEP = { idle: "waiting", uploading: "running", done: "done", error: "error" };
+const ANALYSIS_TO_STEP = { idle: "waiting", running: "running", done: "done", error: "error" };
 
+// Ordre des domaines autour des radars (le backend les renvoie dans un autre ordre).
+const DOMAIN_ORDER = ["Data", "Web", "DevOps", "Mobile", "IA / ML"];
+
+// ---------------------------------------------------------------------------
+// Zone 3 (Résultats) : données de démonstration, encore statiques.
+// Elles seront remplacées par le matching réel à l'étape suivante.
+// ---------------------------------------------------------------------------
 // logo: URL du logo de la société (null = initiales affichées à la place)
 // address: sert à ouvrir la position exacte sur Google Maps
 const OFFERS = [
@@ -103,13 +106,6 @@ const OFFERS = [
   },
 ];
 
-const PROFILE = {
-  level: "Étudiant en 3e année DSI",
-  skills: "Python, SQL, React, Docker, PostgreSQL",
-  experience: "Stage d'été, projets académiques",
-  education: "Licence DSI",
-};
-
 // ---------------------------------------------------------------------------
 // Géométrie du radar de matching
 // Centre = le profil de l'étudiant. Plus le score est élevé, plus l'offre est
@@ -122,7 +118,7 @@ const R_MIN = 70;
 const R_MAX = 230;
 const NODE_R = 24;
 const RING_SCORES = [85, 70, 55, 40];
-const AXES = DOMAINS.map((d, i) => ({ domain: d.domain, angle: -90 + i * 72 }));
+const AXES = DOMAIN_ORDER.map((domain, i) => ({ domain, angle: -90 + i * 72 }));
 
 function radiusFor(score) {
   const s = Math.min(100, Math.max(40, score));
@@ -165,6 +161,17 @@ function formatSize(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} Mo`;
   }
   return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
+
+// Aplatit une section du CV (plusieurs lignes) en un court résumé d'une ligne.
+function summarize(text, max = 140) {
+  if (!text) return null;
+  const flat = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 function scoreLevel(score) {
@@ -377,51 +384,25 @@ function MatchRadar({ show, activeId, onActive, onTip, userInitial }) {
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const cvUpload = useCvUpload();
+  const analysis = useAnalysis();
 
   const inputRef = useRef(null);
-  const [file, setFile] = useState(null);
-  const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [status, setStatus] = useState("idle"); // idle | running | done
-  const [doneCount, setDoneCount] = useState(0);
   const [saved, setSaved] = useState(false);
   const [activeId, setActiveId] = useState(null); // offre mise en avant
   const [tipId, setTipId] = useState(null); // offre dont on affiche l'info-bulle
 
-  // Simulation de l'analyse : une étape terminée toutes les 900 ms.
-  useEffect(() => {
-    if (status !== "running") return;
-    const id = setInterval(() => setDoneCount((c) => c + 1), 900);
-    return () => clearInterval(id);
-  }, [status]);
-
-  useEffect(() => {
-    if (status === "running" && doneCount >= STEPS.length) {
-      setStatus("done");
-    }
-  }, [status, doneCount]);
+  const cv = cvUpload.status === "done" ? cvUpload.cv : null;
+  const analysing = analysis.status === "running";
+  const busy = cvUpload.status === "uploading" || analysing;
+  const done = analysis.status === "done";
 
   function handleFile(selected) {
-    if (!selected) return;
-
-    const isPdf =
-      selected.type === "application/pdf" ||
-      selected.name.toLowerCase().endsWith(".pdf");
-
-    if (!isPdf) {
-      setError("Le fichier doit être un PDF.");
-      return;
-    }
-    if (selected.size > MAX_SIZE) {
-      setError("Le fichier dépasse 5 Mo.");
-      return;
-    }
-
-    setError("");
-    setFile({ name: selected.name, size: selected.size });
-    setStatus("idle");
-    setDoneCount(0);
+    if (!selected || busy) return;
+    analysis.reset();
     setSaved(false);
+    cvUpload.upload(selected); // vérifie le PDF et la taille, puis l'envoie au backend
   }
 
   function onInputChange(e) {
@@ -436,21 +417,25 @@ export default function Home() {
   }
 
   function launchAnalysis() {
-    if (!file || status === "running") return;
-    setDoneCount(0);
+    if (!cv || analysing) return;
     setSaved(false);
-    setStatus("running");
+    analysis.run(cv.text);
   }
 
-  function stepState(index) {
-    if (index < doneCount) return { state: "done", text: "Terminé" };
-    if (status === "running" && index === doneCount) {
-      return { state: "running", text: "En cours…" };
-    }
-    return { state: "waiting", text: "En attente" };
-  }
+  const steps = [
+    { label: STEP_LABELS[0], state: UPLOAD_TO_STEP[cvUpload.status] },
+    { label: STEP_LABELS[1], state: ANALYSIS_TO_STEP[analysis.status] },
+    { label: STEP_LABELS[2], state: "waiting", text: "Bientôt" },
+  ];
 
-  const done = status === "done";
+  const selectedSkills = new Set(analysis.skills.map((s) => s.name));
+  const addableSkills = analysis.catalog.filter((s) => !selectedSkills.has(s.name));
+  const radarData = DOMAIN_ORDER.map((domain) => ({
+    domain,
+    value: analysis.domains.find((d) => d.domain === domain)?.score ?? 0,
+  }));
+  const domainValue = Object.fromEntries(radarData.map((d) => [d.domain, d.value]));
+
   const displayName = user?.full_name || "Prénom Nom";
   const userInitial = displayName.trim().charAt(0).toUpperCase() || "?";
   const tipOffer = tipId ? PLACED.find((o) => o.id === tipId) : null;
@@ -496,6 +481,7 @@ export default function Home() {
             <button
               type="button"
               className="home-btn-outline"
+              disabled={busy}
               onClick={() => inputRef.current?.click()}
             >
               Choisir un fichier
@@ -509,27 +495,33 @@ export default function Home() {
             />
           </div>
 
-          {error && (
-            <p className="home-error" role="alert">
-              {error}
+          {cvUpload.status === "uploading" && (
+            <p className="home-info" role="status">
+              Lecture du PDF…
             </p>
           )}
 
-          {file && !error && (
+          {cvUpload.status === "error" && (
+            <p className="home-error" role="alert">
+              {cvUpload.error}
+            </p>
+          )}
+
+          {cv && (
             <div className="home-file">
               <span className="home-file-icon">PDF</span>
               <div className="home-file-info">
-                <span className="home-file-name" title={file.name}>
-                  {file.name}
+                <span className="home-file-name" title={cv.filename}>
+                  {cv.filename}
                 </span>
                 <span className="home-file-meta">
-                  {formatSize(file.size)} · chargé
+                  {formatSize(cv.size)} · chargé
                 </span>
               </div>
             </div>
           )}
 
-          {file && (
+          {cv && (
             <dl className="home-profile home-fade">
               <div>
                 <dt>Nom</dt>
@@ -537,19 +529,23 @@ export default function Home() {
               </div>
               <div>
                 <dt>Niveau</dt>
-                <dd>{PROFILE.level}</dd>
+                <dd>{cv.level ?? "Non détecté"}</dd>
               </div>
               <div>
                 <dt>Compétences</dt>
-                <dd>{PROFILE.skills}</dd>
+                <dd>
+                  {done
+                    ? analysis.skills.map((s) => s.name).join(", ") || "Aucune détectée"
+                    : "Détectées à l'analyse"}
+                </dd>
               </div>
               <div>
                 <dt>Expériences</dt>
-                <dd>{PROFILE.experience}</dd>
+                <dd>{summarize(cv.sections?.experience) ?? "Non détecté"}</dd>
               </div>
               <div>
                 <dt>Formation</dt>
-                <dd>{PROFILE.education}</dd>
+                <dd>{summarize(cv.sections?.formation) ?? "Non détecté"}</dd>
               </div>
             </dl>
           )}
@@ -557,10 +553,10 @@ export default function Home() {
           <button
             type="button"
             className="home-btn"
-            disabled={!file || status === "running"}
+            disabled={!cv || analysing}
             onClick={launchAnalysis}
           >
-            {status === "running" ? "Analyse en cours…" : "Lancer l'analyse"}
+            {analysing ? "Analyse en cours…" : "Lancer l'analyse"}
           </button>
         </section>
 
@@ -572,41 +568,69 @@ export default function Home() {
           </div>
 
           <ul className="home-steps">
-            {STEPS.map((label, i) => {
-              const s = stepState(i);
-              return (
-                <li key={label} className={`home-step is-${s.state}`}>
-                  <StepIcon state={s.state} />
-                  <span className="home-step-label">{label}</span>
-                  <span className="home-step-state">{s.text}</span>
-                </li>
-              );
-            })}
+            {steps.map((s) => (
+              <li key={s.label} className={`home-step is-${s.state}`}>
+                <StepIcon state={s.state} />
+                <span className="home-step-label">{s.label}</span>
+                <span className="home-step-state">{s.text ?? STATE_TEXT[s.state]}</span>
+              </li>
+            ))}
           </ul>
+
+          {analysis.status === "error" && (
+            <p className="home-error" role="alert">
+              {analysis.error}
+            </p>
+          )}
 
           {done ? (
             <>
               <div className="home-fade">
                 <p className="home-label">Compétences détectées</p>
+                {analysis.skills.length === 0 && (
+                  <p className="home-empty">
+                    Aucune compétence détectée : ajoute-les ci-dessous.
+                  </p>
+                )}
                 <div className="home-chips">
-                  {SKILLS.map((skill) => (
-                    <span className="home-chip" key={skill}>
-                      {skill}
+                  {analysis.skills.map((skill) => (
+                    <span className="home-chip" key={skill.name}>
+                      {skill.name}
+                      <button
+                        type="button"
+                        aria-label={`Retirer ${skill.name}`}
+                        onClick={() => analysis.removeSkill(skill.name)}
+                      >
+                        ×
+                      </button>
                     </span>
                   ))}
                 </div>
+                <select
+                  className="home-select"
+                  aria-label="Ajouter une compétence"
+                  value=""
+                  onChange={(e) => e.target.value && analysis.addSkill(e.target.value)}
+                >
+                  <option value="">Ajouter une compétence…</option>
+                  {addableSkills.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name} ({s.domain})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="home-fade">
                 <p className="home-label">Profil par domaine</p>
                 <div className="home-radar">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={DOMAINS} outerRadius="70%">
+                    <RadarChart data={radarData} outerRadius="70%">
                       <PolarGrid stroke="#cfd9e2" />
                       <PolarAngleAxis
                         dataKey="domain"
                         tick={{ fill: "#334155", fontSize: 13 }}
-                        tickFormatter={(d) => `${d} · ${DOMAIN_VALUE[d]}%`}
+                        tickFormatter={(d) => `${d} · ${domainValue[d]}%`}
                       />
                       <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                       <Radar
@@ -623,7 +647,7 @@ export default function Home() {
               </div>
             </>
           ) : (
-            status === "idle" && (
+            analysis.status === "idle" && (
               <p className="home-empty">
                 Charge ton CV puis lance l'analyse pour voir tes compétences et
                 ton profil par domaine.
@@ -641,6 +665,12 @@ export default function Home() {
 
           <div className="home-results">
             <div className="home-results-graph">
+              {done && (
+                <p className="home-demo">
+                  Données de démonstration : le matching réel avec les offres
+                  arrive à l'étape suivante.
+                </p>
+              )}
               <p className="home-hint">
                 Plus une société est proche du centre, plus l'offre correspond à
                 ton profil. Clique sur une société pour ouvrir sa position sur
