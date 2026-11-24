@@ -581,8 +581,8 @@ a {
   background: transparent;
 }
 
-/* Bandeau : la zone Résultats affiche encore des données de démonstration */
-.home-demo {
+/* Note d'information dans la zone Résultats (ex. peu d'offres proches) */
+.home-note {
   margin: 0 0 12px;
   max-width: 560px;
   padding: 8px 12px;
@@ -892,6 +892,12 @@ a {
 
 .home-maps:hover {
   text-decoration: underline;
+}
+
+.home-offer-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 /* Anneau de score */
