@@ -7,10 +7,19 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Offers from "./pages/Offers";
 import Saved from "./pages/Saved";
+import OfferDetail from "./pages/OfferDetail";
 export default function App() {
   return (
     
     <Routes>
+      <Route
+  path="/offres/:id"
+  element={
+    <ProtectedRoute>
+      <OfferDetail />
+    </ProtectedRoute>
+  }
+/>
       <Route
   path="/offres"
   element={

@@ -325,3 +325,32 @@
   justify-content: flex-end;
   margin-top: 16px;
 }
+.detail-back {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--teal);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 26px;
+}
+
+.detail-section {
+  margin: 24px 0 8px;
+  font-size: 16px;
+}
+
+.detail-description {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.detail-actions {
+  justify-content: flex-end;
+  margin-top: 24px;
+}
