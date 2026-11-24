@@ -7,6 +7,18 @@ export const SAVED_PROFILES_QUERY = gql`
       name
       skills
       createdAt
+      domains {
+        domain
+        score
+      }
+      topOffers {
+        offerId
+        title
+        company
+        city
+        score
+        missing
+      }
     }
   }
 `;

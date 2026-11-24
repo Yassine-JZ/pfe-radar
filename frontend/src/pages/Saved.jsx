@@ -25,6 +25,71 @@ function mapsUrl(offer) {
   )}`;
 }
 
+function ProfileCard({ profile, onDelete }) {
+  const domains = [...profile.domains].sort((a, b) => b.score - a.score);
+
+  return (
+    <article className="offers-card">
+      <div className="offers-card-head">
+        <h3 className="offers-card-title">{profile.name}</h3>
+        <span className="offers-tag">{profile.skills.length} compétences</span>
+      </div>
+      <p className="offers-card-meta">Sauvegardé le {formatDate(profile.createdAt)}</p>
+
+      <div className="offers-pills">
+        {profile.skills.map((skill) => (
+          <span className="offers-pill" key={skill}>
+            {skill}
+          </span>
+        ))}
+      </div>
+
+      {domains.length > 0 && (
+        <div className="saved-block">
+          <h4 className="saved-block-title">Domaines</h4>
+          {domains.map((d) => (
+            <div className="saved-bar-row" key={d.domain}>
+              <span className="saved-bar-label">{d.domain}</span>
+              <div className="saved-bar">
+                <div className="saved-bar-fill" style={{ width: `${d.score}%` }} />
+              </div>
+              <span className="saved-bar-value">{d.score}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {profile.topOffers.length > 0 && (
+        <div className="saved-block">
+          <h4 className="saved-block-title">Meilleures offres à ce moment-là</h4>
+          <ul className="saved-top">
+            {profile.topOffers.map((o) => (
+              <li key={o.offerId}>
+                <span className="saved-top-score">{o.score}%</span>
+                <span className="saved-top-text">
+                  {o.title} · {o.company} · {o.city}
+                  {o.missing.length > 0 && (
+                    <span className="saved-top-missing">
+                      {" "}
+                      — à renforcer : {o.missing.join(", ")}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="offers-links saved-actions">
+        <button type="button" className="offers-reset" onClick={() => onDelete(profile.id)}>
+          Supprimer
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function Saved() {
   const profilesQuery = useQuery(SAVED_PROFILES_QUERY, {
     fetchPolicy: "cache-and-network",
@@ -172,31 +237,7 @@ export default function Saved() {
         {!profilesQuery.error && profiles.length > 0 && (
           <div className="offers-list">
             {profiles.map((p) => (
-              <article className="offers-card" key={p.id}>
-                <div className="offers-card-head">
-                  <h3 className="offers-card-title">{p.name}</h3>
-                  <span className="offers-tag">{p.skills.length} compétences</span>
-                </div>
-                <p className="offers-card-meta">Sauvegardé le {formatDate(p.createdAt)}</p>
-                <div className="offers-card-foot">
-                  <div className="offers-pills">
-                    {p.skills.map((skill) => (
-                      <span className="offers-pill" key={skill}>
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="offers-links">
-                    <button
-                      type="button"
-                      className="offers-reset"
-                      onClick={() => removeProfile(p.id)}
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-              </article>
+              <ProfileCard key={p.id} profile={p} onDelete={removeProfile} />
             ))}
           </div>
         )}

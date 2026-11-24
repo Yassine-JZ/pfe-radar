@@ -55,8 +55,20 @@ class MatchResultType:
     needs_more: bool  # trop peu d'offres proches : il faudrait en chercher d'autres
 
 @strawberry.type
+class SavedMatchType:
+    offer_id: int
+    title: str
+    company: str
+    city: str
+    score: int
+    missing: list[str]
+
+
+@strawberry.type
 class SavedProfileType:
     id: int
     name: str
     skills: list[str]
     created_at: datetime
+    domains: list[DomainScoreType]
+    top_offers: list[SavedMatchType]

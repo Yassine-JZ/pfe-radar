@@ -1,19 +1,29 @@
+from datetime import date
+
 import strawberry
 from graphql import GraphQLError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from strawberry.types import Info
 
-from ..models import SavedProfile
+from ..models import Offer, SavedProfile
+from ..services.matching import rank
+from ..services.profile import domain_scores
 from ..services.skills import skills_by_names
 from .context import Context, require_user
-from .types import SavedProfileType
+from .types import DomainScoreType, SavedMatchType, SavedProfileType
 
 MAX_SAVED = 20
+TOP_OFFERS = 5
 
 
 def to_type(p: SavedProfile) -> SavedProfileType:
     return SavedProfileType(
-        id=p.id, name=p.name, skills=list(p.skills), created_at=p.created_at
+        id=p.id,
+        name=p.name,
+        skills=list(p.skills),
+        created_at=p.created_at,
+        domains=[DomainScoreType(**d) for d in (p.domains or [])],
+        top_offers=[SavedMatchType(**m) for m in (p.top_offers or [])],
     )
 
 
@@ -59,7 +69,37 @@ class ProfilesMutation:
         if count >= MAX_SAVED:
             raise GraphQLError("Limite de profils sauvegardés atteinte")
 
-        profile = SavedProfile(user_id=user.id, name=name, skills=names)
+        skill_set = set(names)
+        domains = [
+            {"domain": d["domain"], "score": d["score"]}
+            for d in domain_scores(skill_set)
+        ]
+
+        offers = db.scalars(
+            select(Offer).where(
+                or_(Offer.deadline.is_(None), Offer.deadline >= date.today())
+            )
+        ).all()
+        ranked = rank(offers, skill_set)
+        top_offers = [
+            {
+                "offer_id": m.offer.id,
+                "title": m.offer.title,
+                "company": m.offer.company,
+                "city": m.offer.city,
+                "score": m.score,
+                "missing": list(m.missing),
+            }
+            for m in ranked[:TOP_OFFERS]
+        ]
+
+        profile = SavedProfile(
+            user_id=user.id,
+            name=name,
+            skills=names,
+            domains=domains,
+            top_offers=top_offers,
+        )
         db.add(profile)
         db.commit()
         db.refresh(profile)
