@@ -1,5 +1,5 @@
 from datetime import date
-
+from .offers import OffersQuery
 import strawberry
 from graphql import GraphQLError
 from sqlalchemy import or_, select
@@ -24,7 +24,7 @@ MAX_OFFERS = 20
 
 
 @strawberry.type
-class Query:
+class Query(OffersQuery):
     @strawberry.field
     def ping(self) -> str:
         return "pong"
