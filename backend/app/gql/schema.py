@@ -1,5 +1,6 @@
 from datetime import date
 from .offers import OffersQuery
+from .ai_search import AiSearchQuery
 from .cities import CitiesQuery
 import strawberry
 from graphql import GraphQLError
@@ -27,7 +28,7 @@ MAX_OFFERS = 20
 
 
 @strawberry.type
-class Query(OffersQuery, CitiesQuery, ProfilesQuery, SavedOffersQuery):
+class Query(OffersQuery, CitiesQuery, ProfilesQuery, SavedOffersQuery, AiSearchQuery):
     @strawberry.field
     def ping(self) -> str:
         return "pong"

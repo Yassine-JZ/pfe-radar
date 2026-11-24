@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@apollo/client";
+import { useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { Link, NavLink, useSearchParams } from "react-router-dom";
 import { CITIES_QUERY, OFFERS_QUERY } from "../graphql/offers";
 import {
   SAVED_OFFERS_QUERY,
   SAVED_OFFER_IDS_QUERY,
   TOGGLE_SAVE_OFFER_MUTATION,
-} from "../graphql/savedOffers";
+}
+from "../graphql/savedOffers";
+import { AI_SEARCH_QUERY } from "../graphql/aiSearch";
 import { DOMAINS, OFFER_TYPES, PAGE_SIZE } from "../offers/constants";
 import "./Offers.css";
 
@@ -92,6 +94,31 @@ export default function Offers() {
     refetchQueries: [{ query: SAVED_OFFER_IDS_QUERY }, { query: SAVED_OFFERS_QUERY }],
   });
   const savedIds = new Set(savedData?.savedOfferIds ?? []);
+    const [aiText, setAiText] = useState("");
+  const [aiNote, setAiNote] = useState("");
+  const [runAiSearch, { loading: aiLoading, error: aiError }] = useLazyQuery(
+    AI_SEARCH_QUERY,
+    { fetchPolicy: "network-only" }
+  );
+
+  async function submitAi(event) {
+    event.preventDefault();
+    const question = aiText.trim();
+    if (!question) return;
+    setAiNote("");
+    const result = await runAiSearch({ variables: { query: question } });
+    const filters = result.data?.aiSearchFilters;
+    if (!filters) return;
+
+    setText(filters.search ?? "");
+    setAiNote(filters.explanation);
+    const next = new URLSearchParams();
+    if (filters.search) next.set("q", filters.search);
+    if (filters.city) next.set("ville", filters.city);
+    if (filters.type) next.set("type", filters.type);
+    if (filters.domain) next.set("domaine", filters.domain);
+    setParams(next);
+  }
   const { data, loading, error, refetch } = useQuery(OFFERS_QUERY, {
     variables: {
       search: q || null,
@@ -146,7 +173,25 @@ export default function Offers() {
           <span className="offers-badge">01</span>
           <h1>Offres</h1>
         </div>
-
+        <form className="offers-ai" onSubmit={submitAi}>
+          <input
+            type="text"
+            className="offers-search"
+            placeholder="✨ Décris ce que tu cherches : « stage PFE data à Tunis avec Python »"
+            value={aiText}
+            maxLength={300}
+            onChange={(event) => setAiText(event.target.value)}
+          />
+          <button
+            type="submit"
+            className="btn offers-btn"
+            disabled={aiLoading || !aiText.trim()}
+          >
+            {aiLoading ? "Analyse…" : "Recherche IA"}
+          </button>
+        </form>
+        {aiError && <p className="error">Recherche IA indisponible : {aiError.message}</p>}
+        {aiNote && hasFilters && <p className="offers-ai-note">✨ {aiNote}</p>}
         <form className="offers-filters" onSubmit={submitSearch}>
           <input
             type="search"
