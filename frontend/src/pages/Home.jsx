@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -8,107 +8,29 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "../auth/AuthContext";
+import { useAnalysis } from "../hooks/useAnalysis";
+import { useCvUpload } from "../hooks/useCvUpload";
+import { useMatching } from "../hooks/useMatching";
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5 Mo
-
-// ---------------------------------------------------------------------------
-// Données de démonstration (statiques).
-// Elles seront remplacées par la réponse du backend à l'étape suivante.
-// ---------------------------------------------------------------------------
-const STEPS = [
+const STEP_LABELS = [
   "Extraction du texte",
   "Détection des compétences",
-  "Comparaison avec 42 offres",
+  "Comparaison avec les offres",
 ];
 
-const SKILLS = ["Python", "SQL", "React", "Docker", "PostgreSQL"];
-
-const DOMAINS = [
-  { domain: "Data", value: 80 },
-  { domain: "Web", value: 70 },
-  { domain: "DevOps", value: 45 },
-  { domain: "Mobile", value: 30 },
-  { domain: "IA / ML", value: 40 },
-];
-const DOMAIN_VALUE = Object.fromEntries(DOMAINS.map((d) => [d.domain, d.value]));
-
-// logo: URL du logo de la société (null = initiales affichées à la place)
-// address: sert à ouvrir la position exacte sur Google Maps
-const OFFERS = [
-  {
-    id: "a",
-    title: "Data Analyst – PFE",
-    company: "Société A",
-    city: "Tunis",
-    domain: "Data",
-    score: 87,
-    logo: null,
-    address: "Technopark El Ghazala, Ariana, Tunisie",
-    missing: ["Power BI"],
-  },
-  {
-    id: "d",
-    title: "Data Engineer – PFE",
-    company: "Société D",
-    city: "Sousse",
-    domain: "Data",
-    score: 81,
-    logo: null,
-    address: "Technopole de Sousse, Tunisie",
-    missing: ["Spark", "Airflow"],
-  },
-  {
-    id: "e",
-    title: "Développeur Web – PFE",
-    company: "Société E",
-    city: "Sfax",
-    domain: "Web",
-    score: 79,
-    logo: null,
-    address: "Sfax Technopark, Tunisie",
-    missing: ["TypeScript"],
-  },
-  {
-    id: "b",
-    title: "Full-Stack – PFE",
-    company: "Société B",
-    city: "Nabeul",
-    domain: "Web",
-    score: 72,
-    logo: null,
-    address: "Nabeul, Tunisie",
-    missing: ["TypeScript", "Node.js"],
-  },
-  {
-    id: "f",
-    title: "Ingénieur DevOps – PFE",
-    company: "Société F",
-    city: "Tunis",
-    domain: "DevOps",
-    score: 64,
-    logo: null,
-    address: "Les Berges du Lac, Tunis, Tunisie",
-    missing: ["Kubernetes", "CI/CD"],
-  },
-  {
-    id: "c",
-    title: "Ingénieur MLOps – PFE",
-    company: "Société C",
-    city: "Tunis",
-    domain: "IA / ML",
-    score: 58,
-    logo: null,
-    address: "Centre Urbain Nord, Tunis, Tunisie",
-    missing: ["TensorFlow", "MLflow"],
-  },
-];
-
-const PROFILE = {
-  level: "Étudiant en 3e année DSI",
-  skills: "Python, SQL, React, Docker, PostgreSQL",
-  experience: "Stage d'été, projets académiques",
-  education: "Licence DSI",
+const STATE_TEXT = {
+  waiting: "En attente",
+  running: "En cours…",
+  done: "Terminé",
+  error: "Erreur",
 };
+
+// Correspondance entre l'état d'un hook et l'état affiché d'une étape.
+const UPLOAD_TO_STEP = { idle: "waiting", uploading: "running", done: "done", error: "error" };
+const ANALYSIS_TO_STEP = { idle: "waiting", running: "running", done: "done", error: "error" };
+
+// Ordre des domaines autour des radars (le backend les renvoie dans un autre ordre).
+const DOMAIN_ORDER = ["Data", "Web", "DevOps", "Mobile", "IA / ML"];
 
 // ---------------------------------------------------------------------------
 // Géométrie du radar de matching
@@ -122,7 +44,7 @@ const R_MIN = 70;
 const R_MAX = 230;
 const NODE_R = 24;
 const RING_SCORES = [85, 70, 55, 40];
-const AXES = DOMAINS.map((d, i) => ({ domain: d.domain, angle: -90 + i * 72 }));
+const AXES = DOMAIN_ORDER.map((domain, i) => ({ domain, angle: -90 + i * 72 }));
 
 function radiusFor(score) {
   const s = Math.min(100, Math.max(40, score));
@@ -148,12 +70,18 @@ function placeOffers(offers) {
   });
 }
 
-const PLACED = placeOffers(OFFERS);
-
 function mapsUrl(offer) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    offer.address
+    `${offer.company} ${offer.city} Tunisie`
   )}`;
+}
+
+// "2026-12-31" -> "31 décembre"
+function formatDeadline(iso) {
+  const date = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
 }
 
 function initials(company) {
@@ -165,6 +93,17 @@ function formatSize(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} Mo`;
   }
   return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
+
+// Aplatit une section du CV (plusieurs lignes) en un court résumé d'une ligne.
+function summarize(text, max = 140) {
+  if (!text) return null;
+  const flat = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 function scoreLevel(score) {
@@ -185,7 +124,7 @@ function ScoreRing({ score, size = 58 }) {
       height={size}
       viewBox="0 0 58 58"
       role="img"
-      aria-label={`Compatibilité ${score}%`}
+      aria-label={`Score ${score}%`}
     >
       <circle className="home-ring-track" cx="29" cy="29" r={r} />
       <circle
@@ -225,7 +164,7 @@ function StepIcon({ state }) {
 }
 
 // Radar de matching : le centre = toi, chaque société est un nœud cliquable.
-function MatchRadar({ show, activeId, onActive, onTip, userInitial }) {
+function MatchRadar({ show, placed, activeId, onActive, onTip, userInitial }) {
   return (
     <svg
       className="home-rd"
@@ -301,7 +240,7 @@ function MatchRadar({ show, activeId, onActive, onTip, userInitial }) {
 
       {/* Sociétés */}
       {show &&
-        PLACED.map((o, i) => (
+        placed.map((o, i) => (
           <g
             key={o.id}
             className={`home-node ${scoreLevel(o.score)}${
@@ -313,7 +252,7 @@ function MatchRadar({ show, activeId, onActive, onTip, userInitial }) {
               href={mapsUrl(o)}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`${o.title}, ${o.company}, ${o.city}, compatibilité ${o.score}%. Ouvrir la position sur la map`}
+              aria-label={`${o.title}, ${o.company}, ${o.city}, score ${o.score}%. Ouvrir la position sur la map`}
               onMouseEnter={() => {
                 onActive(o.id);
                 onTip(o.id);
@@ -377,51 +316,25 @@ function MatchRadar({ show, activeId, onActive, onTip, userInitial }) {
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const cvUpload = useCvUpload();
+  const analysis = useAnalysis();
+  const matching = useMatching();
 
   const inputRef = useRef(null);
-  const [file, setFile] = useState(null);
-  const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [status, setStatus] = useState("idle"); // idle | running | done
-  const [doneCount, setDoneCount] = useState(0);
-  const [saved, setSaved] = useState(false);
   const [activeId, setActiveId] = useState(null); // offre mise en avant
   const [tipId, setTipId] = useState(null); // offre dont on affiche l'info-bulle
 
-  // Simulation de l'analyse : une étape terminée toutes les 900 ms.
-  useEffect(() => {
-    if (status !== "running") return;
-    const id = setInterval(() => setDoneCount((c) => c + 1), 900);
-    return () => clearInterval(id);
-  }, [status]);
-
-  useEffect(() => {
-    if (status === "running" && doneCount >= STEPS.length) {
-      setStatus("done");
-    }
-  }, [status, doneCount]);
+  const cv = cvUpload.status === "done" ? cvUpload.cv : null;
+  const analysing = analysis.status === "running";
+  const busy = cvUpload.status === "uploading" || analysing;
+  const done = analysis.status === "done";
 
   function handleFile(selected) {
-    if (!selected) return;
-
-    const isPdf =
-      selected.type === "application/pdf" ||
-      selected.name.toLowerCase().endsWith(".pdf");
-
-    if (!isPdf) {
-      setError("Le fichier doit être un PDF.");
-      return;
-    }
-    if (selected.size > MAX_SIZE) {
-      setError("Le fichier dépasse 5 Mo.");
-      return;
-    }
-
-    setError("");
-    setFile({ name: selected.name, size: selected.size });
-    setStatus("idle");
-    setDoneCount(0);
-    setSaved(false);
+    if (!selected || busy) return;
+    analysis.reset();
+    matching.reset();
+    cvUpload.upload(selected); // vérifie le PDF et la taille, puis l'envoie au backend
   }
 
   function onInputChange(e) {
@@ -436,24 +349,57 @@ export default function Home() {
   }
 
   function launchAnalysis() {
-    if (!file || status === "running") return;
-    setDoneCount(0);
-    setSaved(false);
-    setStatus("running");
+    if (!cv || analysing) return;
+    analysis.run(cv.text);
   }
 
-  function stepState(index) {
-    if (index < doneCount) return { state: "done", text: "Terminé" };
-    if (status === "running" && index === doneCount) {
-      return { state: "running", text: "En cours…" };
-    }
-    return { state: "waiting", text: "En attente" };
-  }
+  // Chaque changement de compétences (analyse, ajout, retrait) relance le classement des offres.
+  const skillNames = useMemo(() => analysis.skills.map((s) => s.name), [analysis.skills]);
+  const { run: runMatching } = matching;
+  useEffect(() => {
+    if (analysis.status === "done") runMatching(skillNames);
+  }, [analysis.status, skillNames, runMatching]);
 
-  const done = status === "done";
+  const offers = useMemo(
+    () =>
+      (matching.result?.offers ?? []).map((o) => ({
+        id: String(o.id),
+        title: o.title,
+        company: o.company,
+        city: o.city,
+        domain: o.domain,
+        score: o.score,
+        logo: null,
+        covered: o.covered,
+        missing: o.missing,
+        applyUrl: o.applyUrl,
+        deadline: o.deadline,
+      })),
+    [matching.result]
+  );
+  const placed = useMemo(() => placeOffers(offers), [offers]);
+  const showResults = done && placed.length > 0;
+
+  const steps = [
+    { label: STEP_LABELS[0], state: UPLOAD_TO_STEP[cvUpload.status] },
+    { label: STEP_LABELS[1], state: ANALYSIS_TO_STEP[analysis.status] },
+    {
+      label: matching.result ? `Comparaison avec ${matching.result.total} offres` : STEP_LABELS[2],
+      state: ANALYSIS_TO_STEP[matching.status],
+    },
+  ];
+
+  const selectedSkills = new Set(analysis.skills.map((s) => s.name));
+  const addableSkills = analysis.catalog.filter((s) => !selectedSkills.has(s.name));
+  const radarData = DOMAIN_ORDER.map((domain) => ({
+    domain,
+    value: analysis.domains.find((d) => d.domain === domain)?.score ?? 0,
+  }));
+  const domainValue = Object.fromEntries(radarData.map((d) => [d.domain, d.value]));
+
   const displayName = user?.full_name || "Prénom Nom";
   const userInitial = displayName.trim().charAt(0).toUpperCase() || "?";
-  const tipOffer = tipId ? PLACED.find((o) => o.id === tipId) : null;
+  const tipOffer = tipId ? placed.find((o) => o.id === tipId) : null;
 
   return (
     <div className="home">
@@ -496,6 +442,7 @@ export default function Home() {
             <button
               type="button"
               className="home-btn-outline"
+              disabled={busy}
               onClick={() => inputRef.current?.click()}
             >
               Choisir un fichier
@@ -509,27 +456,33 @@ export default function Home() {
             />
           </div>
 
-          {error && (
-            <p className="home-error" role="alert">
-              {error}
+          {cvUpload.status === "uploading" && (
+            <p className="home-info" role="status">
+              Lecture du PDF…
             </p>
           )}
 
-          {file && !error && (
+          {cvUpload.status === "error" && (
+            <p className="home-error" role="alert">
+              {cvUpload.error}
+            </p>
+          )}
+
+          {cv && (
             <div className="home-file">
               <span className="home-file-icon">PDF</span>
               <div className="home-file-info">
-                <span className="home-file-name" title={file.name}>
-                  {file.name}
+                <span className="home-file-name" title={cv.filename}>
+                  {cv.filename}
                 </span>
                 <span className="home-file-meta">
-                  {formatSize(file.size)} · chargé
+                  {formatSize(cv.size)} · chargé
                 </span>
               </div>
             </div>
           )}
 
-          {file && (
+          {cv && (
             <dl className="home-profile home-fade">
               <div>
                 <dt>Nom</dt>
@@ -537,19 +490,23 @@ export default function Home() {
               </div>
               <div>
                 <dt>Niveau</dt>
-                <dd>{PROFILE.level}</dd>
+                <dd>{cv.level ?? "Non détecté"}</dd>
               </div>
               <div>
                 <dt>Compétences</dt>
-                <dd>{PROFILE.skills}</dd>
+                <dd>
+                  {done
+                    ? analysis.skills.map((s) => s.name).join(", ") || "Aucune détectée"
+                    : "Détectées à l'analyse"}
+                </dd>
               </div>
               <div>
                 <dt>Expériences</dt>
-                <dd>{PROFILE.experience}</dd>
+                <dd>{summarize(cv.sections?.experience) ?? "Non détecté"}</dd>
               </div>
               <div>
                 <dt>Formation</dt>
-                <dd>{PROFILE.education}</dd>
+                <dd>{summarize(cv.sections?.formation) ?? "Non détecté"}</dd>
               </div>
             </dl>
           )}
@@ -557,10 +514,10 @@ export default function Home() {
           <button
             type="button"
             className="home-btn"
-            disabled={!file || status === "running"}
+            disabled={!cv || analysing}
             onClick={launchAnalysis}
           >
-            {status === "running" ? "Analyse en cours…" : "Lancer l'analyse"}
+            {analysing ? "Analyse en cours…" : "Lancer l'analyse"}
           </button>
         </section>
 
@@ -572,41 +529,69 @@ export default function Home() {
           </div>
 
           <ul className="home-steps">
-            {STEPS.map((label, i) => {
-              const s = stepState(i);
-              return (
-                <li key={label} className={`home-step is-${s.state}`}>
-                  <StepIcon state={s.state} />
-                  <span className="home-step-label">{label}</span>
-                  <span className="home-step-state">{s.text}</span>
-                </li>
-              );
-            })}
+            {steps.map((s) => (
+              <li key={s.label} className={`home-step is-${s.state}`}>
+                <StepIcon state={s.state} />
+                <span className="home-step-label">{s.label}</span>
+                <span className="home-step-state">{s.text ?? STATE_TEXT[s.state]}</span>
+              </li>
+            ))}
           </ul>
+
+          {analysis.status === "error" && (
+            <p className="home-error" role="alert">
+              {analysis.error}
+            </p>
+          )}
 
           {done ? (
             <>
               <div className="home-fade">
                 <p className="home-label">Compétences détectées</p>
+                {analysis.skills.length === 0 && (
+                  <p className="home-empty">
+                    Aucune compétence détectée : ajoute-les ci-dessous.
+                  </p>
+                )}
                 <div className="home-chips">
-                  {SKILLS.map((skill) => (
-                    <span className="home-chip" key={skill}>
-                      {skill}
+                  {analysis.skills.map((skill) => (
+                    <span className="home-chip" key={skill.name}>
+                      {skill.name}
+                      <button
+                        type="button"
+                        aria-label={`Retirer ${skill.name}`}
+                        onClick={() => analysis.removeSkill(skill.name)}
+                      >
+                        ×
+                      </button>
                     </span>
                   ))}
                 </div>
+                <select
+                  className="home-select"
+                  aria-label="Ajouter une compétence"
+                  value=""
+                  onChange={(e) => e.target.value && analysis.addSkill(e.target.value)}
+                >
+                  <option value="">Ajouter une compétence…</option>
+                  {addableSkills.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name} ({s.domain})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="home-fade">
                 <p className="home-label">Profil par domaine</p>
                 <div className="home-radar">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={DOMAINS} outerRadius="70%">
+                    <RadarChart data={radarData} outerRadius="70%">
                       <PolarGrid stroke="#cfd9e2" />
                       <PolarAngleAxis
                         dataKey="domain"
                         tick={{ fill: "#334155", fontSize: 13 }}
-                        tickFormatter={(d) => `${d} · ${DOMAIN_VALUE[d]}%`}
+                        tickFormatter={(d) => `${d} · ${domainValue[d]}%`}
                       />
                       <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                       <Radar
@@ -623,7 +608,7 @@ export default function Home() {
               </div>
             </>
           ) : (
-            status === "idle" && (
+            analysis.status === "idle" && (
               <p className="home-empty">
                 Charge ton CV puis lance l'analyse pour voir tes compétences et
                 ton profil par domaine.
@@ -641,6 +626,18 @@ export default function Home() {
 
           <div className="home-results">
             <div className="home-results-graph">
+              {matching.result?.needsMore && (
+                <p className="home-note">
+                  Peu d'offres correspondent à ton profil : {matching.result.strong} sur{" "}
+                  {matching.result.total} ont un score d'au moins 40%. La
+                  recherche d'autres offres arrive bientôt.
+                </p>
+              )}
+              {matching.status === "error" && (
+                <p className="home-error" role="alert">
+                  {matching.error}
+                </p>
+              )}
               <p className="home-hint">
                 Plus une société est proche du centre, plus l'offre correspond à
                 ton profil. Clique sur une société pour ouvrir sa position sur
@@ -649,7 +646,8 @@ export default function Home() {
 
               <div className="home-match">
                 <MatchRadar
-                  show={done}
+                  show={showResults}
+                  placed={placed}
                   activeId={activeId}
                   onActive={setActiveId}
                   onTip={setTipId}
@@ -669,7 +667,10 @@ export default function Home() {
                     <span>
                       {tipOffer.company} · {tipOffer.city}
                     </span>
-                    <span>Compatibilité {tipOffer.score}%</span>
+                    <span>
+                      Score {tipOffer.score}% · {tipOffer.covered.length}/
+                      {tipOffer.covered.length + tipOffer.missing.length} compétences
+                    </span>
                     <em>Clique pour ouvrir la map ↗</em>
                   </div>
                 )}
@@ -677,10 +678,10 @@ export default function Home() {
             </div>
 
             <div className="home-results-side">
-              {done ? (
+              {showResults ? (
                 <>
                   <ul className="home-offers home-fade">
-                    {PLACED.map((o) => (
+                    {placed.map((o) => (
                       <li
                         key={o.id}
                         className={`home-offer${activeId === o.id ? " is-active" : ""}`}
@@ -695,6 +696,7 @@ export default function Home() {
                             <span className="home-offer-title">{o.title}</span>
                             <span className="home-offer-meta">
                               {o.company} · {o.city}
+                              {o.deadline && ` · avant le ${formatDeadline(o.deadline)}`}
                             </span>
                           </div>
                           <ScoreRing score={o.score} size={48} />
@@ -717,14 +719,26 @@ export default function Home() {
                               </span>
                             )}
                           </div>
-                          <a
-                            className="home-maps"
-                            href={mapsUrl(o)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Voir la map ↗
-                          </a>
+                          <div className="home-offer-links">
+                            {o.applyUrl && (
+                              <a
+                                className="home-maps"
+                                href={o.applyUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Postuler ↗
+                              </a>
+                            )}
+                            <a
+                              className="home-maps"
+                              href={mapsUrl(o)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Voir la map ↗
+                            </a>
+                          </div>
                         </div>
                       </li>
                     ))}
@@ -737,12 +751,18 @@ export default function Home() {
                   <button
                     type="button"
                     className="home-btn home-btn-save"
-                    onClick={() => setSaved(true)}
-                    disabled={saved}
+                    disabled
+                    title="Bientôt"
                   >
-                    {saved ? "Profil sauvegardé ✓" : "Sauvegarder mon profil"}
+                    Sauvegarder mon profil
                   </button>
                 </>
+              ) : done && matching.status === "done" ? (
+                <p className="home-empty">Aucune offre disponible pour le moment.</p>
+              ) : done && matching.status !== "error" ? (
+                <p className="home-info" role="status">
+                  Recherche des offres…
+                </p>
               ) : (
                 <p className="home-empty">
                   Les offres correspondant à ton profil apparaîtront ici, avec
