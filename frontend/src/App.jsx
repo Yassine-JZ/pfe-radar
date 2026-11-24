@@ -5,10 +5,19 @@ import GraphqlCheck from "./pages/GraphqlCheck";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-
+import Offers from "./pages/Offers";
 export default function App() {
   return (
+    
     <Routes>
+      <Route
+  path="/offres"
+  element={
+    <ProtectedRoute>
+      <Offers />
+    </ProtectedRoute>
+  }
+/>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route
