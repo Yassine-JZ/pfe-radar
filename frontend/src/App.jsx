@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Offers from "./pages/Offers";
+import Saved from "./pages/Saved";
 export default function App() {
   return (
     
@@ -15,6 +16,15 @@ export default function App() {
   element={
     <ProtectedRoute>
       <Offers />
+    </ProtectedRoute>
+  }
+  
+/>
+<Route
+  path="/sauvegardes"
+  element={
+    <ProtectedRoute>
+      <Saved />
     </ProtectedRoute>
   }
 />

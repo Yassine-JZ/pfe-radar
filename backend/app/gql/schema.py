@@ -5,6 +5,8 @@ import strawberry
 from graphql import GraphQLError
 from sqlalchemy import or_, select
 from strawberry.types import Info
+from .profiles import ProfilesMutation, ProfilesQuery
+from .saved_offers import SavedOffersMutation, SavedOffersQuery
 
 from ..models import Offer
 from ..services.matching import coverage, rank
@@ -25,7 +27,7 @@ MAX_OFFERS = 20
 
 
 @strawberry.type
-class Query(OffersQuery, CitiesQuery):
+class Query(OffersQuery, CitiesQuery, ProfilesQuery, SavedOffersQuery):
     @strawberry.field
     def ping(self) -> str:
         return "pong"
@@ -114,4 +116,9 @@ class Query(OffersQuery, CitiesQuery):
         )
 
 
-schema = strawberry.Schema(query=Query)
+@strawberry.type
+class Mutation(ProfilesMutation, SavedOffersMutation):
+    pass
+
+
+schema = strawberry.Schema(query=Query, mutation=Mutation)

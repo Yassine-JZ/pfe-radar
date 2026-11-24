@@ -1,7 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client";
 import { Link, NavLink, useSearchParams } from "react-router-dom";
 import { CITIES_QUERY, OFFERS_QUERY } from "../graphql/offers";
+import {
+  SAVED_OFFERS_QUERY,
+  SAVED_OFFER_IDS_QUERY,
+  TOGGLE_SAVE_OFFER_MUTATION,
+} from "../graphql/savedOffers";
 import { DOMAINS, OFFER_TYPES, PAGE_SIZE } from "../offers/constants";
 import "./Offers.css";
 
@@ -16,8 +21,12 @@ function formatDeadline(deadline) {
   });
   return `avant le ${date}`;
 }
-
-function OfferCard({ offer }) {
+function mapsUrl(offer) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${offer.company} ${offer.city} Tunisie`
+  )}`;
+}
+function OfferCard({ offer, saved, onToggle }) {
   const shown = offer.skills.slice(0, MAX_PILLS);
   const extra = offer.skills.length - shown.length;
   const deadline = formatDeadline(offer.deadline);
@@ -44,12 +53,23 @@ function OfferCard({ offer }) {
           {extra > 0 && <span className="offers-pill offers-pill-more">+{extra}</span>}
         </div>
         <div className="offers-links">
+                      <button
+            type="button"
+            className="offers-star"
+            aria-pressed={saved}
+            title={saved ? "Retirer des sauvegardes" : "Sauvegarder cette offre"}
+            onClick={() => onToggle(offer.id)}
+          >
+            {saved ? "★ Sauvegardée" : "☆ Sauvegarder"}
+          </button>
           {offer.applyUrl && (
             <a href={offer.applyUrl} target="_blank" rel="noopener noreferrer">
               Postuler ↗
             </a>
           )}
-          <Link to={`/offres/carte?offre=${offer.id}`}>Voir la map ↗</Link>
+        <a href={mapsUrl(offer)} target="_blank" rel="noopener noreferrer">
+  Voir la map ↗
+</a>
         </div>
       </div>
     </article>
@@ -67,6 +87,11 @@ export default function Offers() {
   const [text, setText] = useState(q);
 
   const { data: citiesData } = useQuery(CITIES_QUERY);
+    const { data: savedData } = useQuery(SAVED_OFFER_IDS_QUERY);
+  const [toggleSave] = useMutation(TOGGLE_SAVE_OFFER_MUTATION, {
+    refetchQueries: [{ query: SAVED_OFFER_IDS_QUERY }, { query: SAVED_OFFERS_QUERY }],
+  });
+  const savedIds = new Set(savedData?.savedOfferIds ?? []);
   const { data, loading, error, refetch } = useQuery(OFFERS_QUERY, {
     variables: {
       search: q || null,
@@ -112,6 +137,7 @@ export default function Offers() {
             Analyse
           </NavLink>
           <NavLink to="/offres">Offres</NavLink>
+          <NavLink to="/sauvegardes">Sauvegardes</NavLink>
         </nav>
       </header>
 
@@ -200,7 +226,12 @@ export default function Offers() {
             </p>
             <div className="offers-list">
               {result.items.map((offer) => (
-                <OfferCard key={offer.id} offer={offer} />
+                               <OfferCard
+                  key={offer.id}
+                  offer={offer}
+                  saved={savedIds.has(offer.id)}
+                  onToggle={(id) => toggleSave({ variables: { offerId: id } })}
+                />
               ))}
             </div>
             <div className="offers-pager">

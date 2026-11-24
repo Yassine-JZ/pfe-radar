@@ -53,3 +53,29 @@ class Offer(Base):
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
+
+class SavedProfile(Base):
+    __tablename__ = "saved_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    skills: Mapped[list[str]] = mapped_column(ARRAY(String(60)), default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+class SavedOffer(Base):
+    __tablename__ = "saved_offers"
+    __table_args__ = (
+        UniqueConstraint("user_id", "offer_id", name="uq_saved_offers_user_offer"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    offer_id: Mapped[int] = mapped_column(
+        ForeignKey("offers.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

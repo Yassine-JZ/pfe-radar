@@ -11,7 +11,9 @@ import { useAuth } from "../auth/AuthContext";
 import { useAnalysis } from "../hooks/useAnalysis";
 import { useCvUpload } from "../hooks/useCvUpload";
 import { useMatching } from "../hooks/useMatching";
-
+import { useMutation } from "@apollo/client";
+import { SAVE_PROFILE_MUTATION } from "../graphql/profiles";
+import { Link } from "react-router-dom";
 const STEP_LABELS = [
   "Extraction du texte",
   "Détection des compétences",
@@ -355,6 +357,23 @@ export default function Home() {
 
   // Chaque changement de compétences (analyse, ajout, retrait) relance le classement des offres.
   const skillNames = useMemo(() => analysis.skills.map((s) => s.name), [analysis.skills]);
+    const [saveProfile, { loading: saving }] = useMutation(SAVE_PROFILE_MUTATION);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  async function handleSaveProfile() {
+    setSaveMessage("");
+    try {
+      await saveProfile({
+        variables: {
+          name: `Profil du ${new Date().toLocaleDateString("fr-FR")}`,
+          skills: skillNames,
+        },
+      });
+      setSaveMessage("Profil sauvegardé. Tu le retrouves dans Sauvegardes.");
+    } catch (err) {
+      setSaveMessage(err.message);
+    }
+  }
   const { run: runMatching } = matching;
   useEffect(() => {
     if (analysis.status === "done") runMatching(skillNames);
@@ -409,12 +428,12 @@ export default function Home() {
           <a className="home-link is-active" href="#analyse">
             Analyse
           </a>
-          <button type="button" className="home-link" disabled title="Bientôt">
-            Offres
-          </button>
-          <button type="button" className="home-link" disabled title="Bientôt">
-            Sauvegardes
-          </button>
+         <Link className="home-link" to="/offres">
+  Offres
+</Link>
+<Link className="home-link" to="/sauvegardes">
+  Sauvegardes
+</Link>
           <button type="button" className="home-logout" onClick={logout}>
             Déconnexion
           </button>
@@ -730,32 +749,32 @@ export default function Home() {
                                 Postuler ↗
                               </a>
                             )}
-                            <a
-                              className="home-maps"
-                              href={mapsUrl(o)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              Voir la map ↗
-                            </a>
+                         <Link className="home-maps" to={`/offres/carte?offre=${o.id}`}>
+  Voir la map ↗
+</Link>
                           </div>
                         </div>
                       </li>
                     ))}
                   </ul>
 
-                  <button type="button" className="home-more" disabled title="Bientôt">
-                    Voir toutes les offres →
-                  </button>
+                  <Link className="home-more" to="/offres">
+  Voir toutes les offres →
+</Link>
 
-                  <button
-                    type="button"
-                    className="home-btn home-btn-save"
-                    disabled
-                    title="Bientôt"
-                  >
-                    Sauvegarder mon profil
-                  </button>
+              <button
+  type="button"
+  className="home-btn home-btn-save"
+  disabled={saving || skillNames.length === 0}
+  onClick={handleSaveProfile}
+>
+  {saving ? "Sauvegarde…" : "Sauvegarder mon profil"}
+</button>
+{saveMessage && (
+  <p className="home-info" role="status">
+    {saveMessage}
+  </p>
+)}
                 </>
               ) : done && matching.status === "done" ? (
                 <p className="home-empty">Aucune offre disponible pour le moment.</p>
